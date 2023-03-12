@@ -2,25 +2,14 @@ import os
 import json
 from colorama import Fore
 import datetime
-
-"""
-restaran
-
-1 login -> sign
-2 ovqat qoshish  -> add food
-3 ichimlik qoshish  -> add drink
-4 hisobot  ->  report
-
-    * 1. ovqatga buyurtma  ->  order food
-    * 2. oldingi buyurtmalari  ->  history
-    * 3. exit
-"""
+import bcrypt
 
 
 class Restaurant:
     # simple variables
     def __init__(self):
         self.current_user = 0
+        self.current_grade = ''
 
     # create json files
     @staticmethod
@@ -73,18 +62,18 @@ class Restaurant:
                         break
 
     # check user
-    def check_user(self):
-
-        username = input(Fore.RESET + "Enter username: ")
-        password = input(Fore.RESET + "Enter password: ")
-
-        with open('users.json', 'r') as f:
-            file = json.load(f)
-            for i in file:
-                if i["username"] == username and i["password"] == password:
-                    self.current_user = int(i["id"])
-                    return True
-            return False
+    # def check_user(self):
+    #
+    #     username = input(Fore.RESET + "Enter username: ")
+    #     password = input(Fore.RESET + "Enter password: ")
+    #
+    #     with open('users.json', 'r') as f:
+    #         file = json.load(f)
+    #         for i in file:
+    #             if i["username"] == username and i["password"] == password:
+    #                 self.current_user = int(i["id"])
+    #                 return True
+    #         return False
 
     @staticmethod
     def make_p_id():
@@ -137,8 +126,14 @@ class Restaurant:
             print(Fore.LIGHTYELLOW_EX + "select with numbers only!")
             self.type_item()
 
-    # add food
-    def add_item(self, product_type):
+    # add product
+    def add_item(self, s):
+        d = {1: "maishiy texnika",
+             2: "oziq ovqat",
+             3: "non mahsuloti",
+             4: "shirinlik",
+             5: "tozalik mahsuloti"}
+        product_type = d[s]
         print(Fore.LIGHTBLUE_EX + f'default product type: {product_type}')
         p_id = self.make_p_id()
         name = input(Fore.CYAN + 'name: ')
@@ -153,29 +148,29 @@ class Restaurant:
             "quantity": quantity
         }
         with open("products.json", "r") as g:
-            s = json.load(g)
+            l = json.load(g)
 
-        for i in s:
+        for i in l:
             if i["type"] == product_type:
                 i["items"].append(d)
 
         with open("products.json", "w") as f:
-            json.dump(s, f, indent=2)
+            json.dump(l, f, indent=2)
             print(Fore.GREEN + 'Item added successfully')
             return True
         return False
 
-    # report (last order)
+    # report
     @staticmethod
     def report():
-        # all_history = []
 
         with open("users.json", "r") as f:
             users = json.load(f)
             if len(users) > 0:
                 for user in users:
                     # all_history.append(i["order history"])
-                    print(Fore.LIGHTMAGENTA_EX + "username [" + str(user["username"]) + "] - history :" + str(user["order history"]))
+                    print(Fore.LIGHTMAGENTA_EX + "username [" + str(user["username"]) + "] - history :" + str(
+                        user["order history"]))
             else:
                 print(Fore.LIGHTYELLOW_EX + 'users not found')
 
@@ -204,24 +199,65 @@ class Restaurant:
 
         return False
 
+    @staticmethod
+    def get_grade(username):
+        with open("users.json", "r") as f:
+            users = json.load(f)
+
+        for i in users:
+            if i["username"] == username:
+                return i["grade"]
+
+    # check user
+    def check_user(self):
+        username = input(Fore.RESET + "Enter username: ")
+        password = input(Fore.RESET + "Enter password: ").encode()
+
+        with open('users.json', 'r') as f:
+            file = json.load(f)
+            for i in file:
+                if i["username"] == username:
+                    hashed_password = i["password"].encode()
+                    if bcrypt.checkpw(password, hashed_password):
+                        self.current_user = int(i["id"])
+                        self.current_grade = self.get_grade(username)
+                        return True
+        return False
+
+    # encrypt
+    @staticmethod
+    def encrypt(password):
+        salt = bcrypt.gensalt()  # Generate a salt value
+        hashed_password = bcrypt.hashpw(password.encode(), salt)  # Hash the password using bcrypt
+        return hashed_password
+
     # sign up
     def signup(self):
         username = input('Enter username: ')
         password = input('Enter password: ')
+        grade = input('Are you client [y/n]: ')
 
-        if not self.check_username(username) and username not in ["", " ", "  ", "\n"] and username.strip() != "":
-            if password not in ["", " ", "  ", "\n"] and password.strip() != "":
+        if not self.check_username(username) and username not in ["0"] and username.strip() != "" and \
+                grade.lower() in ["y", "n", "yes", "no"]:
+            if password not in [""] and password.strip() != "":
                 with open("users.json", "r") as f:
                     file = json.load(f)
 
                 u_id = self.make_u_id()
                 self.current_user = int(u_id)
-
+                if grade.lower() in ["y", "yeah", "yes"]:
+                    self.current_grade = 'client'
+                    grade = 'client'
+                else:
+                    self.current_grade = 'admin'
+                    grade = 'admin'
+                password = self.encrypt(password)
                 new_user = {
                     "id": u_id,
                     "username": username,
-                    "password": password,
-                    "order history": []
+                    "password": password.decode(),
+                    "order history": [],
+                    "grade": str(grade)
                 }
                 file.append(new_user)
                 with open("users.json", "w") as f:
@@ -235,28 +271,6 @@ class Restaurant:
             self.signup()
         else:
             print(Fore.YELLOW + 'Invalid username')
-
-    def sign(self):
-        st = ''' 
-            1. Sign In 
-            2. Sign Up
-            3. exit
-            $ '''
-        s = input(Fore.LIGHTGREEN_EX + st)
-
-        if s.isdigit() and 0 < int(s) < 4:
-            # Log in
-            if int(s) == 1:
-                return self.login()
-
-            # Sign up
-            elif int(s) == 2:
-                if self.signup():
-                    print(Fore.LIGHTGREEN_EX + 'Success !')
-                    return True
-        else:
-            print(Fore.LIGHTYELLOW_EX + 'selection not found')
-            return False
 
     # add information to the history
     def add_to_history(self, p_name, p_price, p_quantity):
@@ -345,59 +359,92 @@ class Restaurant:
             print(Fore.YELLOW + 'select with numbers only!')
             self.order_product()
 
+    # dining menu
+    def main_menu(self):
+        if self.current_grade == 'client':
+            menu = '''
+                1. order product
+                2. history
+                3. exit
+                $ '''
+            s = input(Fore.MAGENTA + menu)
+            if s == '1':
+                if self.order_product():
+                    self.main_menu()
+                else:
+                    self.main_menu()
+            elif s == '2':
+                self.order_history()
+                self.main_menu()
+            elif s == '3':
+                self.enterance()
+            else:
+                print(Fore.YELLOW + 'selection not exist')
+                self.main_menu()
+        elif self.current_grade == 'admin':
+            menu = '''
+                1. add product
+                2. my adds
+                3. report
+                4. exit
+                $ '''
+            s = input(Fore.MAGENTA + menu)
+            if s == '1':
+                v = '''
+            select type: 
+            1. maishiy texnika
+            2. oziq ovqat
+            3. non mahsuloti
+            4. shirinlik
+            5. tozalik mahsuloti
+            6. exit
+            $ '''
+                s_t = input(Fore.LIGHTCYAN_EX + v)
+                if s_t.isdigit() and s_t != '6':
+                    self.add_item(int(s_t))
+                    self.main_menu()
+                else:
+                    self.main_menu()
+            elif s == '2':
+                self.order_history()
+                self.main_menu()
+            elif s == '3':
+                self.report()
+                self.main_menu()
+            elif s == '4':
+                self.enterance()
+            else:
+                print(Fore.YELLOW + 'selection not exist')
+
     # the enterance
     def enterance(self):
         self.create_json()
         enterance_text = '''
-            1. Sign
-            2. add product
-            3. report
-            4. exit
+            1. register
+            2. login
+            3. exit
             : '''
         selection = input(Fore.BLUE + enterance_text)
         if selection.isdigit() and 0 < int(selection) < 5:
             if selection == '1':
-                if self.sign():
+                if self.signup():
                     self.main_menu()
                 else:
                     self.enterance()
             elif selection == '2':
-                self.type_item()
-                self.enterance()
+                if self.login():
+                    self.main_menu()
+                else:
+                    self.enterance()
             elif selection == '3':
-                self.report()
-                self.enterance()
-            elif selection == '4':
                 print(Fore.GREEN + 'See you soon 👋\n' + Fore.MAGENTA + "YOUR ADS HERE!")
                 exit()
         else:
             print(Fore.YELLOW + 'selection not exist')
             self.enterance()
 
-    # dining menu
-    def main_menu(self):
-        menu = '''
-            1. order product
-            2. history
-            3. exit
-            $ '''
-        s = input(Fore.MAGENTA + menu)
-        if s == '1':
-            if self.order_product():
-                self.main_menu()
-            else:
-                self.main_menu()
-        elif s == '2':
-            self.order_history()
-            self.main_menu()
-        elif s == '3':
-            self.enterance()
-        else:
-            print(Fore.YELLOW + 'selection not exist')
-            self.main_menu()
-
 
 # ----------------------------------------------------------------
 a = Restaurant()
-a.enterance()  # main function of the restaurant
+a.enterance()  # main function of the shop
 # ----------------------------------------------------------------
